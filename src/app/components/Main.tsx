@@ -1,7 +1,7 @@
 "use client";
 
 import { addToQueue, checkIdInQueue } from "@/api/userQueue";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../../../utils/supabase";
 import { fetchMessages, sendMessage } from "@/api/messages";
 
@@ -29,7 +29,7 @@ const MainComponent = () => {
               payload.new.user1_id === userId ||
               payload.new.user2_id === userId
             ) {
-              // console.log("New chat session: ", payload.new);
+              console.log("New chat session: ", payload.new.id);
               setChatSessionId(payload.new.id);
               setCurrentAction("chat");
             }
@@ -43,23 +43,40 @@ const MainComponent = () => {
     }
   }, [userId]);
 
-  useEffect(() => {
-    const channel = supabase
-      .channel("messages")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "PUBLIC", table: "messages" },
-        (payload) => {
-          if (payload.new.chat_session_id === chatSessionId) {
-            setMessages((messages) => [payload.new as any, ...messages]);
-          }
-        }
-      )
-      .subscribe();
+  const memoizedFetchMessages = useCallback(async () => {
+    if (chatSessionId !== null) {
+      const messages = await fetchMessages(chatSessionId);
+      setMessages(messages);
+    }
+  }, [chatSessionId]);
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+  useEffect(() => {
+    if (chatSessionId) {
+      memoizedFetchMessages();
+
+      const channel = supabase
+        .channel("messages")
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "messages",
+          },
+          (payload) => {
+            // console.log("1 New message: ", payload.new);
+            if (payload.new.chat_session_id === chatSessionId) {
+              console.log("New message: ", payload.new);
+              setMessages((messages) => [...messages, payload.new as any]);
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
   }, [chatSessionId]);
 
   const handleSendMessage = async () => {
@@ -92,7 +109,7 @@ const MainComponent = () => {
           <div className="w-full flex flex-col items-center justify-center bg-blue-900 p-3 rounded-lg gap-5 px-2">
             <h2 className="font-semibold text-white">CHAT</h2>
             <div className="w-full flex flex-col gap-3">
-              <div className="w-full min-h-32 h-32 bg-blue-500 rounded-lg p-2 overflow-y-auto">
+              <div className="w-full min-h-32 h-32 bg-blue-500 rounded-lg p-2 overflow-y-auto text-black">
                 {messages.map((message, index) => (
                   <p key={index}>
                     {message.user_id === userId ? "You" : "Stranger"}:{" "}
