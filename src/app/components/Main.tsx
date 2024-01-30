@@ -1,7 +1,7 @@
 "use client";
 
 import { addToQueue, checkIdInQueue } from "@/api/userQueue";
-import { useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import { supabase } from "../../../utils/supabase";
 import { fetchMessages, sendMessage } from "@/api/messages";
 
@@ -14,23 +14,22 @@ const MainComponent = () => {
   const [messageContent, setMessageContent] = useState("");
 
   useEffect(() => {
-    console.log("userId: ", userId);
-  }, [userId]);
-
-  useEffect(() => {
     if (userId) {
-      // Delay the subscription by 5 seconds
-      setTimeout(() => {
-        const channel = supabase
-          .channel("chat_sessions2")
-          .on(
-            "postgres_changes",
-            {
-              event: "INSERT",
-              schema: "public",
-              table: "chat_sessions2",
-            },
-            (payload) => {
+      // console.log(`User ${userId} is subscribing to the channel`);
+
+      const channel = supabase
+        .channel("chat_sessions2")
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "chat_sessions2",
+          },
+          (payload) => {
+            try {
+              console.log(`INSERT event triggered for User ${userId}`);
+
               if (
                 payload.new.user1_id === userId ||
                 payload.new.user2_id === userId
@@ -39,27 +38,57 @@ const MainComponent = () => {
                 setChatSessionId(payload.new.id);
                 setCurrentAction("chat");
               }
+            } catch (error) {
+              console.error("Error handling event:", error);
             }
-          )
-          .subscribe();
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "chat_sessions2",
+          },
+          (payload) => {
+            try {
+              console.log(`UPDATE event triggered for User ${userId}`);
 
-        return () => {
-          supabase.removeChannel(channel);
-        };
-      }, 5000); // 5000 milliseconds = 5 seconds
+              if (
+                payload.new.user1_id === userId ||
+                payload.new.user2_id === userId
+              ) {
+                console.log("New chat session: ", payload.new.id);
+                setChatSessionId(payload.new.id);
+                setCurrentAction("chat");
+              }
+            } catch (error) {
+              console.error("Error handling event:", error);
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status !== "SUBSCRIBED") {
+            console.error("Error subscribing to channel:", status);
+          }
+        });
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [userId]);
 
-  const memoizedFetchMessages = useCallback(async () => {
-    if (chatSessionId !== null) {
-      const messages = await fetchMessages(chatSessionId);
-      setMessages(messages);
-    }
-  }, [chatSessionId]);
+  // const memoizedFetchMessages = useCallback(async () => {
+  //   if (chatSessionId !== null) {
+  //     const messages = await fetchMessages(chatSessionId);
+  //     setMessages(messages);
+  //   }
+  // }, [chatSessionId]);
 
   useEffect(() => {
     if (chatSessionId) {
-      memoizedFetchMessages();
+      // memoizedFetchMessages();
 
       const channel = supabase
         .channel("messages")
@@ -73,7 +102,7 @@ const MainComponent = () => {
           (payload) => {
             // console.log("1 New message: ", payload.new);
             if (payload.new.chat_session_id === chatSessionId) {
-              console.log("New message: ", payload.new);
+              // console.log("New message: ", payload.new);
               setMessages((messages) => [...messages, payload.new as any]);
             }
           }
@@ -93,8 +122,8 @@ const MainComponent = () => {
       content: messageContent,
     };
 
-    await sendMessage(messageData);
     setMessageContent("");
+    await sendMessage(messageData);
   };
 
   return (
