@@ -6,7 +6,7 @@ import { supabase } from "../../../utils/supabase";
 import { fetchMessages, sendMessage } from "@/api/messages";
 
 const MainComponent = () => {
-  const [currentAction, setCurrentAction] = useState("chat"); // none, search, chat
+  const [currentAction, setCurrentAction] = useState("none"); // none, search, chat
   const [leave, setLeave] = useState(false);
   const [userId, setUserId] = useState<number | null>(null);
   const [chatSessionId, setChatSessionId] = useState<number | null>(null);
