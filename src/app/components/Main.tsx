@@ -14,32 +14,39 @@ const MainComponent = () => {
   const [messageContent, setMessageContent] = useState("");
 
   useEffect(() => {
-    if (userId) {
-      const channel = supabase
-        .channel("chat_sessions2")
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "chat_sessions2",
-          },
-          (payload) => {
-            if (
-              payload.new.user1_id === userId ||
-              payload.new.user2_id === userId
-            ) {
-              console.log("New chat session: ", payload.new.id);
-              setChatSessionId(payload.new.id);
-              setCurrentAction("chat");
-            }
-          }
-        )
-        .subscribe();
+    console.log("userId: ", userId);
+  }, [userId]);
 
-      return () => {
-        supabase.removeChannel(channel);
-      };
+  useEffect(() => {
+    if (userId) {
+      // Delay the subscription by 5 seconds
+      setTimeout(() => {
+        const channel = supabase
+          .channel("chat_sessions2")
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "chat_sessions2",
+            },
+            (payload) => {
+              if (
+                payload.new.user1_id === userId ||
+                payload.new.user2_id === userId
+              ) {
+                console.log("New chat session: ", payload.new.id);
+                setChatSessionId(payload.new.id);
+                setCurrentAction("chat");
+              }
+            }
+          )
+          .subscribe();
+
+        return () => {
+          supabase.removeChannel(channel);
+        };
+      }, 5000); // 5000 milliseconds = 5 seconds
     }
   }, [userId]);
 
@@ -126,7 +133,10 @@ const MainComponent = () => {
                   placeholder="Type your message here..."
                 />
                 <button
-                  className="bg-purple-700 text-white px-3 py-2 rounded-lg"
+                  disabled={messageContent === ""}
+                  className={`${
+                    messageContent === "" ? "bg-gray-700" : " bg-purple-700"
+                  } text-white px-3 py-2 rounded-lg`}
                   onClick={handleSendMessage}>
                   Send
                 </button>
