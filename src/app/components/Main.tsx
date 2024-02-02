@@ -4,6 +4,7 @@ import { addToQueue, checkIdInQueue } from "@/api/userQueue";
 import { memo, useCallback, useEffect, useState } from "react";
 import { supabase } from "../../../utils/supabase";
 import { fetchMessages, sendMessage } from "@/api/messages";
+import { updateSessionUser1, updateSessionUser2 } from "@/api/chatSession";
 
 const MainComponent = () => {
   const [currentAction, setCurrentAction] = useState("none"); // none, search, chat
@@ -12,6 +13,8 @@ const MainComponent = () => {
   const [chatSessionId, setChatSessionId] = useState<number | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [messageContent, setMessageContent] = useState("");
+
+  const [connectionFound, setConnectionFound] = useState(false);
 
   useEffect(() => {
     if (userId) {
@@ -25,6 +28,8 @@ const MainComponent = () => {
             event: "INSERT",
             schema: "public",
             table: "chat_sessions2",
+            // filter: `user1_id=eq.${userId},or,user2_id=eq.${userId}`,
+            // filter: `user1_id=eq.${userId}`,
           },
           (payload) => {
             try {
@@ -37,6 +42,13 @@ const MainComponent = () => {
                 console.log("New chat session: ", payload.new.id);
                 setChatSessionId(payload.new.id);
                 setCurrentAction("chat");
+                setConnectionFound(true);
+
+                if (payload.new.user1_id === userId) {
+                  updateSessionUser1(userId, true);
+                } else if (payload.new.user2_id === userId) {
+                  updateSessionUser2(userId, true);
+                }
               }
             } catch (error) {
               console.error("Error handling event:", error);
@@ -49,6 +61,7 @@ const MainComponent = () => {
             event: "UPDATE",
             schema: "public",
             table: "chat_sessions2",
+            // filter: `user1_id=eq.${userId},or,user2_id=eq.${userId}`,
           },
           (payload) => {
             try {
@@ -61,6 +74,14 @@ const MainComponent = () => {
                 console.log("New chat session: ", payload.new.id);
                 setChatSessionId(payload.new.id);
                 setCurrentAction("chat");
+                if (!connectionFound) {
+                  setConnectionFound(true);
+                  if (payload.new.user1_id === userId) {
+                    updateSessionUser1(userId, true);
+                  } else if (payload.new.user2_id === userId) {
+                    updateSessionUser2(userId, true);
+                  }
+                }
               }
             } catch (error) {
               console.error("Error handling event:", error);

@@ -14,3 +14,45 @@ export const fetchSession = async (userID: number) => {
 
   return data || [];
 };
+
+export const updateSessionUser1 = async (
+  userID: number,
+  connection: boolean
+) => {
+  try {
+    const { data, error } = await supabase
+      .from("chat_sessions2")
+      .update({ user1_connection: connection })
+      .eq("user1_id", userID);
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error updating pet record:", error);
+    return null;
+  }
+};
+
+export const updateSessionUser2 = async (
+  userID: number,
+  connection: boolean
+) => {
+  try {
+    const { data, error } = await supabase
+      .from("chat_sessions2")
+      .update({ user2_connection: connection })
+      .eq("user2_id", userID);
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error updating pet record:", error);
+    return null;
+  }
+};
