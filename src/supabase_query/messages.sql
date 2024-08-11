@@ -1,9 +1,8 @@
-create table public.messages (
-    id serial,
-    chat_session_id integer not null,
-    user_id integer not null,
-    content text not null,
-    created_at timestamp without time zone null default current_timestamp,
-    constraint messages_pkey primary key (id),
-    constraint messages_chat_session_id_fkey foreign key (chat_session_id) references chat_sessions2 (id) on update cascade on delete cascade
-) tablespace pg_default;
+CREATE TABLE public.messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    chat_session_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (chat_session_id) REFERENCES public.chat_sessions(id) ON UPDATE CASCADE ON DELETE CASCADE
+) TABLESPACE pg_default;

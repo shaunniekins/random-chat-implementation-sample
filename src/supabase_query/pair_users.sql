@@ -12,12 +12,12 @@ WHERE
         SELECT
             user1_id
         FROM
-            chat_sessions2
+            chat_sessions
         UNION
         SELECT
             user2_id
         FROM
-            chat_sessions2
+            chat_sessions
     )
 ORDER BY
     timestamp
@@ -26,7 +26,7 @@ LIMIT
 
 IF FOUND THEN
 INSERT INTO
-    chat_sessions2(user1_id, user2_id)
+    chat_sessions(user1_id, user2_id)
 VALUES
     (NEW.user_id, other_user.user_id);
 
@@ -46,12 +46,12 @@ WHERE
         SELECT
             user1_id
         FROM
-            chat_sessions2
+            chat_sessions
         UNION
         SELECT
             user2_id
         FROM
-            chat_sessions2
+            chat_sessions
     )
 ORDER BY
     timestamp
@@ -60,7 +60,7 @@ LIMIT
 
 IF FOUND THEN -- Pair the current user with the user found in the queue
 INSERT INTO
-    chat_sessions2(user1_id, user2_id)
+    chat_sessions(user1_id, user2_id)
 VALUES
     (NEW.user_id, other_user.user_id);
 

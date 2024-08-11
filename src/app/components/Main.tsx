@@ -4,44 +4,56 @@
 
 import { addToQueue, checkIdInQueue } from "@/api/userQueue";
 import { useCallback, useEffect, useState } from "react";
+import { v4 as uuidv4 } from "uuid";
 import { supabase } from "../../../utils/supabase";
 import { fetchMessages, sendMessage } from "@/api/messages";
-import { updateSessionUser1, updateSessionUser2 } from "@/api/chatSession";
+import {
+  deleteChatSession,
+  updateSessionUser1,
+  updateSessionUser2,
+} from "@/api/chatSession";
 
 const MainComponent = () => {
   const [currentAction, setCurrentAction] = useState<
     "none" | "search" | "chat"
   >("none");
-  const [leave, setLeave] = useState(false);
-  const [userId, setUserId] = useState<number | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [chatSessionId, setChatSessionId] = useState<number | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [messageContent, setMessageContent] = useState("");
   const [connectionFound, setConnectionFound] = useState(false);
   const [user, setUser] = useState<number | null>(null);
+  const [partnerConnected, setPartnerConnected] = useState(true);
+
+  useEffect(() => {
+    // Check if userId exists in localStorage, if not, create and store it
+    let storedUserId = localStorage.getItem('userId');
+    if (!storedUserId) {
+      storedUserId = uuidv4();
+      localStorage.setItem('userId', storedUserId);
+    }
+    setUserId(storedUserId);
+  }, []);
 
   // Handle connection checks
   useEffect(() => {
-    if (userId && currentAction !== "chat") {
+    if (userId) {
       const channel = supabase
-        .channel("chat_sessions2")
+        .channel("chat_sessions")
         .on(
           "postgres_changes",
           {
-            event: "INSERT",
+            event: "*", 
             schema: "public",
-            table: "chat_sessions2",
+            table: "chat_sessions",
           },
-          handleInsert
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "chat_sessions2",
-          },
-          handleUpdate
+          (payload) => {
+            if (payload.eventType === "INSERT") {
+              handleInsert(payload);
+            } else if (payload.eventType === "UPDATE") {
+              handleUpdate(payload);
+            }
+          }
         )
         .subscribe((status) => {
           if (status !== "SUBSCRIBED") {
@@ -53,23 +65,24 @@ const MainComponent = () => {
         supabase.removeChannel(channel);
       };
     }
-  }, [userId, currentAction]);
+  }, [userId]);
 
   const handleInsert = (payload: any) => {
     try {
       if (
         userId !== null &&
-        (payload.new.user1_id === userId || payload.new.user2_id === userId) &&
-        (payload.new.user1_connection || payload.new.user2_connection)
+        (payload.new.user1_id === userId || payload.new.user2_id === userId)
       ) {
         setChatSessionId(payload.new.id);
         setCurrentAction("chat");
         setConnectionFound(true);
         if (payload.new.user1_id === userId) {
           setUser(1);
+          setPartnerConnected(payload.new.user2_connection);
           updateSessionUser1(userId, true);
-        } else {
+        } else if (payload.new.user2_id === userId) {
           setUser(2);
+          setPartnerConnected(payload.new.user1_connection);
           updateSessionUser2(userId, true);
         }
       }
@@ -82,24 +95,33 @@ const MainComponent = () => {
     try {
       if (
         userId !== null &&
-        (payload.new.user1_id === userId || payload.new.user2_id === userId) &&
-        (payload.new.user1_connection || payload.new.user2_connection)
+        (payload.new.user1_id === userId || payload.new.user2_id === userId)
       ) {
+        if (payload.new.user1_id === userId) {
+          setUser(1);
+          setPartnerConnected(payload.new.user2_connection);
+          if (!payload.new.user1_connection) {
+            handleLeave();
+            return;
+          }
+        } else if (payload.new.user2_id === userId) {
+          setUser(2);
+          setPartnerConnected(payload.new.user1_connection);
+          if (!payload.new.user2_connection) {
+            handleLeave();
+            return;
+          }
+        }
+
         setChatSessionId(payload.new.id);
         if (currentAction !== "chat") {
           setCurrentAction("chat");
           setConnectionFound(true);
-          if (payload.new.user1_id === userId) {
-            setUser(1);
-            if (userId !== null) {
-              updateSessionUser1(userId, true);
-            }
-          } else {
-            setUser(2);
-            if (userId !== null) {
-              updateSessionUser2(userId, true);
-            }
-          }
+        }
+
+        // Check if both users have left
+        if (!payload.new.user1_connection && !payload.new.user2_connection) {
+          handleLeave();
         }
       }
     } catch (error) {
@@ -113,12 +135,11 @@ const MainComponent = () => {
       setMessages(fetchedMessages);
     }
   }, [chatSessionId]);
+
   useEffect(() => {
     if (chatSessionId) {
-      // Fetch messages initially
       memoizedFetchMessages();
 
-      // Subscribe to the messages channel
       const channel = supabase
         .channel("messages")
         .on(
@@ -143,19 +164,28 @@ const MainComponent = () => {
     }
   }, [chatSessionId, memoizedFetchMessages]);
 
-  const handleLeave = async () => {
-    if (userId && user) {
+  const handleLeave = useCallback(async () => {
+    if (userId && user && chatSessionId) {
       if (user === 1) {
         await updateSessionUser1(userId, false);
       } else if (user === 2) {
         await updateSessionUser2(userId, false);
       }
+
+      if (!partnerConnected) {
+        await deleteChatSession(chatSessionId);
+      }
     }
     setCurrentAction("none");
-  };
+    setChatSessionId(null);
+    setMessages([]);
+    setConnectionFound(false);
+    setPartnerConnected(true);
+    setUser(null);
+  }, [userId, user, chatSessionId, partnerConnected]);
 
   const handleSendMessage = async () => {
-    if (chatSessionId !== null && userId !== null) {
+    if (chatSessionId !== null && userId !== null && partnerConnected) {
       const messageData = {
         chat_session_id: chatSessionId,
         user_id: userId,
@@ -167,28 +197,17 @@ const MainComponent = () => {
   };
 
   const startSearch = async () => {
-    let input = window.prompt("Please enter your user ID:");
-    let parsedUserId = input ? parseInt(input, 10) : null;
-
-    while (parsedUserId !== null && !isNaN(parsedUserId)) {
-      const userExists = await checkIdInQueue(parsedUserId);
+    if (userId) {
+      const userExists = await checkIdInQueue(userId);
 
       if (userExists) {
-        console.log(
-          "User ID already exists in the queue. Please enter a different ID."
-        );
-        input = window.prompt("Please enter a different user ID:");
-        parsedUserId = input ? parseInt(input, 10) : null;
+        console.log("User ID already exists in the queue. Please try again later.");
       } else {
-        setUserId(parsedUserId);
         setCurrentAction("search");
-        addToQueue(parsedUserId);
-        break;
+        addToQueue(userId);
       }
-    }
-
-    if (parsedUserId === null || isNaN(parsedUserId)) {
-      console.log("Invalid user ID entered or user canceled prompt.");
+    } else {
+      console.log("No valid user ID available.");
     }
   };
 
@@ -211,6 +230,9 @@ const MainComponent = () => {
 
           <div className="w-full flex flex-col items-center justify-center bg-blue-900 p-3 rounded-lg gap-5 px-2">
             <h2 className="font-semibold text-white">CHAT</h2>
+            {!partnerConnected && (
+              <p className="text-yellow-300">Your partner has left the chat.</p>
+            )}
             <div className="w-full flex flex-col gap-3">
               <div className="w-full min-h-32 h-32 bg-blue-500 rounded-lg p-2 overflow-y-auto text-black">
                 {messages.map((message, index) => (
@@ -229,11 +251,14 @@ const MainComponent = () => {
                   value={messageContent}
                   onChange={(e) => setMessageContent(e.target.value)}
                   placeholder="Type your message here..."
+                  disabled={!partnerConnected}
                 />
                 <button
-                  disabled={messageContent === ""}
+                  disabled={messageContent === "" || !partnerConnected}
                   className={`${
-                    messageContent === "" ? "bg-gray-700" : "bg-purple-700"
+                    messageContent === "" || !partnerConnected
+                      ? "bg-gray-700"
+                      : "bg-purple-700"
                   } text-white px-3 py-2 rounded-lg`}
                   onClick={handleSendMessage}
                 >

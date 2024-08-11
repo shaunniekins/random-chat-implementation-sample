@@ -1,9 +1,8 @@
-create table public.chat_sessions2 (
-    id serial,
-    user1_id integer not null,
-    user2_id integer not null,
-    created_at timestamp without time zone null default current_timestamp,
-    user1_connection boolean null default true,
-    user2_connection boolean null default true,
-    constraint chat_sessions2_pkey primary key (id)
-) tablespace pg_default;
+CREATE TABLE public.chat_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user1_id UUID NOT NULL,
+    user2_id UUID NOT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE NULL DEFAULT CURRENT_TIMESTAMP,
+    user1_connection BOOLEAN NULL DEFAULT TRUE,
+    user2_connection BOOLEAN NULL DEFAULT TRUE
+) TABLESPACE pg_default;
