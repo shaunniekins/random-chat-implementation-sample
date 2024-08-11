@@ -19,6 +19,7 @@ export const updateSessionUser1 = async (
   userID: number,
   connection: boolean
 ) => {
+  console.log("userID1: ", userID);
   try {
     const { data, error } = await supabase
       .from("chat_sessions2")
@@ -40,6 +41,8 @@ export const updateSessionUser2 = async (
   userID: number,
   connection: boolean
 ) => {
+  console.log("userID2: ", userID);
+
   try {
     const { data, error } = await supabase
       .from("chat_sessions2")
