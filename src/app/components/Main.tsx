@@ -1,30 +1,28 @@
-//src/app/components/Main.tsx
+// src/app/components/Main.tsx
 
 "use client";
 
 import { addToQueue, checkIdInQueue } from "@/api/userQueue";
-import { memo, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../../../utils/supabase";
 import { fetchMessages, sendMessage } from "@/api/messages";
 import { updateSessionUser1, updateSessionUser2 } from "@/api/chatSession";
 
 const MainComponent = () => {
-  const [currentAction, setCurrentAction] = useState("none"); // none, search, chat
+  const [currentAction, setCurrentAction] = useState<
+    "none" | "search" | "chat"
+  >("none");
   const [leave, setLeave] = useState(false);
   const [userId, setUserId] = useState<number | null>(null);
   const [chatSessionId, setChatSessionId] = useState<number | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [messageContent, setMessageContent] = useState("");
-
   const [connectionFound, setConnectionFound] = useState(false);
   const [user, setUser] = useState<number | null>(null);
 
-  // CONNECTION CHECKER
+  // Handle connection checks
   useEffect(() => {
-    // console.log("currentAction", currentAction);
     if (userId && currentAction !== "chat") {
-      // console.log(`User ${userId} is subscribing to the channel`);
-
       const channel = supabase
         .channel("chat_sessions2")
         .on(
@@ -33,35 +31,8 @@ const MainComponent = () => {
             event: "INSERT",
             schema: "public",
             table: "chat_sessions2",
-            // filter: `user1_id=eq.${userId},or,user2_id=eq.${userId}`,
-            // filter: `user1_id=eq.${userId}`,
           },
-          (payload) => {
-            try {
-              // console.log(`INSERT event triggered for User ${userId}`);
-
-              if (
-                (payload.new.user1_id === userId ||
-                  payload.new.user2_id === userId) &&
-                (payload.new.user1_connection || payload.new.user2_connection)
-              ) {
-                // console.log("New chat session: ", payload.new.id);
-                setChatSessionId(payload.new.id);
-                setCurrentAction("chat");
-                setConnectionFound(true);
-
-                if (payload.new.user1_id === userId) {
-                  setUser(1);
-                  updateSessionUser1(userId, true);
-                } else if (payload.new.user2_id === userId) {
-                  setUser(2);
-                  updateSessionUser2(userId, true);
-                }
-              }
-            } catch (error) {
-              console.error("Error handling event:", error);
-            }
-          }
+          handleInsert
         )
         .on(
           "postgres_changes",
@@ -69,37 +40,8 @@ const MainComponent = () => {
             event: "UPDATE",
             schema: "public",
             table: "chat_sessions2",
-            // filter: `user1_id=eq.${userId},or,user2_id=eq.${userId}`,
           },
-          (payload) => {
-            try {
-              // console.log(`UPDATE event triggered for User ${userId}`);
-
-              console.log("payload.new: ", payload.new);
-
-              if (
-                (payload.new.user1_id === userId ||
-                  payload.new.user2_id === userId) &&
-                (payload.new.user1_connection || payload.new.user2_connection)
-              ) {
-                // console.log("New chat session: ", payload.new.id);
-                setChatSessionId(payload.new.id);
-                if (currentAction !== "chat") {
-                  setCurrentAction("chat");
-                  setConnectionFound(true);
-                  if (payload.new.user1_id === userId) {
-                    setUser(1);
-                    updateSessionUser1(userId, true);
-                  } else if (payload.new.user2_id === userId) {
-                    setUser(2);
-                    updateSessionUser2(userId, true);
-                  }
-                }
-              }
-            } catch (error) {
-              console.error("Error handling event:", error);
-            }
-          }
+          handleUpdate
         )
         .subscribe((status) => {
           if (status !== "SUBSCRIBED") {
@@ -113,52 +55,70 @@ const MainComponent = () => {
     }
   }, [userId, currentAction]);
 
-  const memoizedFetchMessages = useCallback(async () => {
-    if (chatSessionId !== null) {
-      const messages = await fetchMessages(chatSessionId);
-      setMessages(messages);
-    }
-  }, [chatSessionId]);
-
-  // DISCONNECTION
-  // useEffect(() => {
-  //   console.log("leave: ", leave);
-  //   if (leave && chatSessionId) {
-  //     console.log("leave2");
-
-  //     if (userId && user) {
-  //       if (user === 1) {
-  //         updateSessionUser1(userId, false);
-  //         console.log("user1 disconnect");
-  //       } else if (user === 2) {
-  //         updateSessionUser2(userId, false);
-  //         console.log("user2 disconnect");
-  //       }
-  //       // setCurrentAction("none");
-  //     }
-  //   }
-  // }, [leave, chatSessionId]);
-
-  const handleLeave = async () => {
-    console.log("leaving");
-    console.log("userId: ", userId);
-    console.log("user: ", user);
-
-    if (userId && user) {
-      if (user === 1) {
-        await updateSessionUser1(userId, false);
-      } else if (user === 2) {
-        await updateSessionUser2(userId, false);
+  const handleInsert = (payload: any) => {
+    try {
+      if (
+        userId !== null &&
+        (payload.new.user1_id === userId || payload.new.user2_id === userId) &&
+        (payload.new.user1_connection || payload.new.user2_connection)
+      ) {
+        setChatSessionId(payload.new.id);
+        setCurrentAction("chat");
+        setConnectionFound(true);
+        if (payload.new.user1_id === userId) {
+          setUser(1);
+          updateSessionUser1(userId, true);
+        } else {
+          setUser(2);
+          updateSessionUser2(userId, true);
+        }
       }
-      // setCurrentAction("none");
+    } catch (error) {
+      console.error("Error handling INSERT event:", error);
     }
   };
 
-  // FETCH MESSAGES
+  const handleUpdate = (payload: any) => {
+    try {
+      if (
+        userId !== null &&
+        (payload.new.user1_id === userId || payload.new.user2_id === userId) &&
+        (payload.new.user1_connection || payload.new.user2_connection)
+      ) {
+        setChatSessionId(payload.new.id);
+        if (currentAction !== "chat") {
+          setCurrentAction("chat");
+          setConnectionFound(true);
+          if (payload.new.user1_id === userId) {
+            setUser(1);
+            if (userId !== null) {
+              updateSessionUser1(userId, true);
+            }
+          } else {
+            setUser(2);
+            if (userId !== null) {
+              updateSessionUser2(userId, true);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error handling UPDATE event:", error);
+    }
+  };
+
+  const memoizedFetchMessages = useCallback(async () => {
+    if (chatSessionId !== null) {
+      const fetchedMessages = await fetchMessages(chatSessionId);
+      setMessages(fetchedMessages);
+    }
+  }, [chatSessionId]);
   useEffect(() => {
     if (chatSessionId) {
+      // Fetch messages initially
       memoizedFetchMessages();
 
+      // Subscribe to the messages channel
       const channel = supabase
         .channel("messages")
         .on(
@@ -170,10 +130,8 @@ const MainComponent = () => {
             filter: `chat_session_id=eq.${chatSessionId}`,
           },
           (payload) => {
-            // console.log("1 New message: ", payload.new);
             if (payload.new.chat_session_id === chatSessionId) {
-              // console.log("New message: ", payload.new);
-              setMessages((messages) => [...messages, payload.new as any]);
+              setMessages((messages) => [...messages, payload.new]);
             }
           }
         )
@@ -183,17 +141,55 @@ const MainComponent = () => {
         supabase.removeChannel(channel);
       };
     }
-  }, [chatSessionId]);
+  }, [chatSessionId, memoizedFetchMessages]);
+
+  const handleLeave = async () => {
+    if (userId && user) {
+      if (user === 1) {
+        await updateSessionUser1(userId, false);
+      } else if (user === 2) {
+        await updateSessionUser2(userId, false);
+      }
+    }
+    setCurrentAction("none");
+  };
 
   const handleSendMessage = async () => {
-    const messageData = {
-      chat_session_id: chatSessionId,
-      user_id: userId,
-      content: messageContent,
-    };
+    if (chatSessionId !== null && userId !== null) {
+      const messageData = {
+        chat_session_id: chatSessionId,
+        user_id: userId,
+        content: messageContent,
+      };
+      setMessageContent("");
+      await sendMessage(messageData);
+    }
+  };
 
-    setMessageContent("");
-    await sendMessage(messageData);
+  const startSearch = async () => {
+    let input = window.prompt("Please enter your user ID:");
+    let parsedUserId = input ? parseInt(input, 10) : null;
+
+    while (parsedUserId !== null && !isNaN(parsedUserId)) {
+      const userExists = await checkIdInQueue(parsedUserId);
+
+      if (userExists) {
+        console.log(
+          "User ID already exists in the queue. Please enter a different ID."
+        );
+        input = window.prompt("Please enter a different user ID:");
+        parsedUserId = input ? parseInt(input, 10) : null;
+      } else {
+        setUserId(parsedUserId);
+        setCurrentAction("search");
+        addToQueue(parsedUserId);
+        break;
+      }
+    }
+
+    if (parsedUserId === null || isNaN(parsedUserId)) {
+      console.log("Invalid user ID entered or user canceled prompt.");
+    }
   };
 
   return (
@@ -206,8 +202,6 @@ const MainComponent = () => {
             className="self-end text-red-500 text-sm"
             onClick={() => {
               if (window.confirm("Are you sure you want to leave?")) {
-                // setCurrentAction("none");
-                // setLeave(true);
                 handleLeave();
               }
             }}
@@ -239,7 +233,7 @@ const MainComponent = () => {
                 <button
                   disabled={messageContent === ""}
                   className={`${
-                    messageContent === "" ? "bg-gray-700" : " bg-purple-700"
+                    messageContent === "" ? "bg-gray-700" : "bg-purple-700"
                   } text-white px-3 py-2 rounded-lg`}
                   onClick={handleSendMessage}
                 >
@@ -250,42 +244,14 @@ const MainComponent = () => {
           </div>
         </div>
       ) : (
-        <>
-          <div>
-            <button
-              className="px-3 py-2 bg-purple-700 text-white rounded-lg"
-              onClick={async () => {
-                let input = window.prompt("Please enter your user ID:");
-                let parsedUserId = input ? parseInt(input, 10) : null;
-
-                while (parsedUserId !== null && !isNaN(parsedUserId)) {
-                  const userExists = await checkIdInQueue(parsedUserId);
-
-                  if (userExists) {
-                    console.log(
-                      "User ID already exists in the queue. Please enter a different ID."
-                    );
-                    input = window.prompt("Please enter a different user ID:");
-                    parsedUserId = input ? parseInt(input, 10) : null;
-                  } else {
-                    setUserId(parsedUserId);
-                    setCurrentAction("search");
-                    addToQueue(parsedUserId);
-                    break;
-                  }
-                }
-
-                if (parsedUserId === null || isNaN(parsedUserId)) {
-                  console.log(
-                    "Invalid user ID entered or user canceled prompt."
-                  );
-                }
-              }}
-            >
-              START SEARCH
-            </button>
-          </div>
-        </>
+        <div>
+          <button
+            className="px-3 py-2 bg-purple-700 text-white rounded-lg"
+            onClick={startSearch}
+          >
+            START SEARCH
+          </button>
+        </div>
       )}
     </div>
   );
