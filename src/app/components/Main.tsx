@@ -2,7 +2,7 @@
 
 "use client";
 
-import { addToQueue, checkIdInQueue } from "@/api/userQueue";
+import { addToQueue, checkIdInQueue, deleteFromQueue } from "@/api/userQueue";
 import { useCallback, useEffect, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { supabase } from "../../../utils/supabase";
@@ -246,7 +246,17 @@ const MainComponent = () => {
   return (
     <div className="h-screen w-screen flex items-center justify-center">
       {currentAction === "search" ? (
-        <h2>SEARCHING ...</h2>
+        <div className="h-full flex flex-col items-center">
+          <div className="h-full flex justify-center items-center">
+            <h2>SEARCHING ...</h2>
+          </div>
+          <div className="py-10">
+            <button className="bg-blue-200 py-2 px-5 rounded-xl text-sm" onClick={() => {
+              setCurrentAction("none");
+              userId && deleteFromQueue(userId);
+            }}>cancel</button>
+          </div>
+        </div>
       ) : currentAction === "chat" ? (
         <div className="w-full flex flex-col px-2">
           <button

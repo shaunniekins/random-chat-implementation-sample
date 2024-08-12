@@ -23,3 +23,14 @@ export const addToQueue = async (userID: string) => {
     console.error("Error adding user to queue: ", error);
   }
 };
+
+export const deleteFromQueue = async (userID: string) => {
+  const { error } = await supabase
+    .from("user_queue")
+    .delete()
+    .eq("user_id", userID);
+
+  if (error) {
+    console.error("Error deleting user from queue: ", error);
+  }
+};
