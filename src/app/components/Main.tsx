@@ -3,7 +3,7 @@
 "use client";
 
 import { addToQueue, checkIdInQueue, deleteFromQueue } from "@/api/userQueue";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { supabase } from "../../../utils/supabase";
 import { fetchMessages, sendMessage } from "@/api/messages";
@@ -243,6 +243,19 @@ const MainComponent = () => {
     }
   };
 
+  const messageContainerRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    if (messageContainerRef.current) {
+      messageContainerRef.current.scrollTop =
+        messageContainerRef.current.scrollHeight;
+    }
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
   return (
     <div className="h-screen w-screen flex items-center justify-center">
       {currentAction === "search" ? (
@@ -251,10 +264,15 @@ const MainComponent = () => {
             <h2>SEARCHING ...</h2>
           </div>
           <div className="py-10">
-            <button className="bg-blue-200 py-2 px-5 rounded-xl text-sm" onClick={() => {
-              setCurrentAction("none");
-              userId && deleteFromQueue(userId);
-            }}>cancel</button>
+            <button
+              className="bg-blue-200 py-2 px-5 rounded-xl text-sm"
+              onClick={() => {
+                setCurrentAction("none");
+                userId && deleteFromQueue(userId);
+              }}
+            >
+              cancel
+            </button>
           </div>
         </div>
       ) : currentAction === "chat" ? (
@@ -276,7 +294,10 @@ const MainComponent = () => {
               <p className="text-yellow-300">Your partner has left the chat.</p>
             )}
             <div className="w-full flex flex-col gap-3">
-              <div className="w-full min-h-32 h-32 bg-blue-500 rounded-lg p-2 overflow-y-auto text-black">
+              <div
+                ref={messageContainerRef}
+                className="w-full min-h-32 h-32 bg-blue-500 rounded-lg p-2 overflow-y-auto text-black"
+              >
                 {messages.map((message, index) => (
                   <p key={index}>
                     <span className="font-semibold">
