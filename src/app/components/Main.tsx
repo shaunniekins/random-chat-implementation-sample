@@ -9,6 +9,7 @@ import { supabase } from "../../../utils/supabase";
 import { fetchMessages, sendMessage } from "@/api/messages";
 import {
   deleteChatSession,
+  fetchSession,
   updateSessionUser1,
   updateSessionUser2,
 } from "@/api/chatSession";
@@ -27,13 +28,42 @@ const MainComponent = () => {
 
   useEffect(() => {
     // Check if userId exists in localStorage, if not, create and store it
-    let storedUserId = localStorage.getItem('userId');
+    let storedUserId = localStorage.getItem("userId");
     if (!storedUserId) {
       storedUserId = uuidv4();
-      localStorage.setItem('userId', storedUserId);
+      localStorage.setItem("userId", storedUserId);
     }
     setUserId(storedUserId);
   }, []);
+
+  // Check if user has an existing chat session or is in the queue
+  useEffect(() => {
+    const fetchAndSetAction = async () => {
+      if (userId) {
+        const sessionData = await fetchSession(userId);
+        if (sessionData.length > 0) {
+          setChatSessionId(sessionData[0].id);
+          setCurrentAction("chat");
+          if (sessionData[0].user1_id === userId) {
+            setUser(1);
+            setPartnerConnected(sessionData[0].user2_connection);
+          } else if (sessionData[0].user2_id === userId) {
+            setUser(2);
+            setPartnerConnected(sessionData[0].user1_connection);
+          }
+          return;
+        }
+
+        const userExists = await checkIdInQueue(userId);
+
+        if (userExists) {
+          setCurrentAction("search");
+        }
+      }
+    };
+
+    fetchAndSetAction();
+  }, [userId]);
 
   // Handle connection checks
   useEffect(() => {
@@ -43,7 +73,7 @@ const MainComponent = () => {
         .on(
           "postgres_changes",
           {
-            event: "*", 
+            event: "*",
             schema: "public",
             table: "chat_sessions",
           },
@@ -201,7 +231,9 @@ const MainComponent = () => {
       const userExists = await checkIdInQueue(userId);
 
       if (userExists) {
-        console.log("User ID already exists in the queue. Please try again later.");
+        console.log(
+          "User ID already exists in the queue. Please try again later."
+        );
       } else {
         setCurrentAction("search");
         addToQueue(userId);
