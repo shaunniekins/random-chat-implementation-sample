@@ -22,7 +22,7 @@ const MainComponent = () => {
   const [chatSessionId, setChatSessionId] = useState<number | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [messageContent, setMessageContent] = useState("");
-  const [connectionFound, setConnectionFound] = useState(false);
+  // const [connectionFound, setConnectionFound] = useState(false);
   const [user, setUser] = useState<number | null>(null);
   const [partnerConnected, setPartnerConnected] = useState(true);
 
@@ -41,7 +41,13 @@ const MainComponent = () => {
     const fetchAndSetAction = async () => {
       if (userId) {
         const sessionData = await fetchSession(userId);
-        if (sessionData.length > 0) {
+        if (
+          sessionData.length > 0 &&
+          ((sessionData[0].user1_id === userId &&
+            sessionData[0].user1_connection) ||
+            (sessionData[0].user2_id === userId &&
+              sessionData[0].user2_connection))
+        ) {
           setChatSessionId(sessionData[0].id);
           setCurrentAction("chat");
           if (sessionData[0].user1_id === userId) {
@@ -55,7 +61,6 @@ const MainComponent = () => {
         }
 
         const userExists = await checkIdInQueue(userId);
-
         if (userExists) {
           setCurrentAction("search");
         }
@@ -97,6 +102,23 @@ const MainComponent = () => {
     }
   }, [userId]);
 
+  const startSearch = async () => {
+    if (userId) {
+      const userExists = await checkIdInQueue(userId);
+
+      if (userExists) {
+        console.log(
+          "User ID already exists in the queue. Please try again later."
+        );
+      } else {
+        setCurrentAction("search");
+        addToQueue(userId);
+      }
+    } else {
+      console.log("No valid user ID available.");
+    }
+  };
+
   const handleInsert = (payload: any) => {
     try {
       if (
@@ -105,7 +127,7 @@ const MainComponent = () => {
       ) {
         setChatSessionId(payload.new.id);
         setCurrentAction("chat");
-        setConnectionFound(true);
+        // setConnectionFound(true);
         if (payload.new.user1_id === userId) {
           setUser(1);
           setPartnerConnected(payload.new.user2_connection);
@@ -125,8 +147,11 @@ const MainComponent = () => {
     try {
       if (
         userId !== null &&
+        payload.new.user1_connection &&
+        payload.new.user2_connection &&
         (payload.new.user1_id === userId || payload.new.user2_id === userId)
       ) {
+        // console.log("UPDATE payload:", payload);
         if (payload.new.user1_id === userId) {
           setUser(1);
           setPartnerConnected(payload.new.user2_connection);
@@ -146,7 +171,7 @@ const MainComponent = () => {
         setChatSessionId(payload.new.id);
         if (currentAction !== "chat") {
           setCurrentAction("chat");
-          setConnectionFound(true);
+          // setConnectionFound(true);
         }
 
         // Check if both users have left
@@ -156,6 +181,40 @@ const MainComponent = () => {
       }
     } catch (error) {
       console.error("Error handling UPDATE event:", error);
+    }
+  };
+
+  const handleLeave = useCallback(async () => {
+    if (userId && user && chatSessionId) {
+      if (user === 1) {
+        await updateSessionUser1(userId, false);
+      } else if (user === 2) {
+        await updateSessionUser2(userId, false);
+      }
+
+      setCurrentAction("none");
+      setChatSessionId(null);
+      setMessages([]);
+      // setPartnerConnected(true);
+      setUser(null);
+
+      if (!partnerConnected) {
+        await deleteChatSession(chatSessionId);
+      }
+    }
+  }, [userId, user, chatSessionId, partnerConnected]);
+
+  // messages
+
+  const handleSendMessage = async () => {
+    if (chatSessionId !== null && userId !== null && partnerConnected) {
+      const messageData = {
+        chat_session_id: chatSessionId,
+        user_id: userId,
+        content: messageContent,
+      };
+      setMessageContent("");
+      await sendMessage(messageData);
     }
   };
 
@@ -193,55 +252,6 @@ const MainComponent = () => {
       };
     }
   }, [chatSessionId, memoizedFetchMessages]);
-
-  const handleLeave = useCallback(async () => {
-    if (userId && user && chatSessionId) {
-      if (user === 1) {
-        await updateSessionUser1(userId, false);
-      } else if (user === 2) {
-        await updateSessionUser2(userId, false);
-      }
-
-      if (!partnerConnected) {
-        await deleteChatSession(chatSessionId);
-      }
-    }
-    setCurrentAction("none");
-    setChatSessionId(null);
-    setMessages([]);
-    setConnectionFound(false);
-    setPartnerConnected(true);
-    setUser(null);
-  }, [userId, user, chatSessionId, partnerConnected]);
-
-  const handleSendMessage = async () => {
-    if (chatSessionId !== null && userId !== null && partnerConnected) {
-      const messageData = {
-        chat_session_id: chatSessionId,
-        user_id: userId,
-        content: messageContent,
-      };
-      setMessageContent("");
-      await sendMessage(messageData);
-    }
-  };
-
-  const startSearch = async () => {
-    if (userId) {
-      const userExists = await checkIdInQueue(userId);
-
-      if (userExists) {
-        console.log(
-          "User ID already exists in the queue. Please try again later."
-        );
-      } else {
-        setCurrentAction("search");
-        addToQueue(userId);
-      }
-    } else {
-      console.log("No valid user ID available.");
-    }
-  };
 
   const messageContainerRef = useRef<HTMLDivElement>(null);
 

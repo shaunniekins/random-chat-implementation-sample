@@ -1,82 +1,35 @@
-CREATE
-OR REPLACE FUNCTION pair_users() RETURNS TRIGGER AS $$ DECLARE other_user RECORD;
-
+CREATE OR REPLACE FUNCTION pair_users() RETURNS TRIGGER AS $$
+DECLARE
+    other_user RECORD;
 BEGIN
-SELECT
-    INTO other_user *
-FROM
-    user_queue
-WHERE
-    user_id != NEW.user_id
-    AND user_id NOT IN (
-        SELECT
-            user1_id
-        FROM
-            chat_sessions
+    -- Find a user who is not in an active chat session
+    SELECT INTO other_user *
+    FROM user_queue
+    WHERE user_id != NEW.user_id
+      AND user_id NOT IN (
+        SELECT user1_id
+        FROM chat_sessions
+        WHERE user1_connection = true
         UNION
-        SELECT
-            user2_id
-        FROM
-            chat_sessions
-    )
-ORDER BY
-    timestamp
-LIMIT
-    1;
+        SELECT user2_id
+        FROM chat_sessions
+        WHERE user2_connection = true
+      )
+    ORDER BY timestamp
+    LIMIT 1;
 
-IF FOUND THEN
-INSERT INTO
-    chat_sessions(user1_id, user2_id)
-VALUES
-    (NEW.user_id, other_user.user_id);
+    IF FOUND THEN
+        -- Pair the users
+        INSERT INTO chat_sessions(user1_id, user2_id, user1_connection, user2_connection)
+        VALUES (NEW.user_id, other_user.user_id, true, true);
 
-DELETE FROM
-    user_queue
-WHERE
-    id IN (NEW.id, other_user.id);
+        -- Remove both users from the queue
+        DELETE FROM user_queue
+        WHERE user_id IN (NEW.user_id, other_user.user_id);
+    END IF;
 
-ELSE -- No match found, check if the current user is already in the queue
-SELECT
-    INTO other_user *
-FROM
-    user_queue
-WHERE
-    user_id != NEW.user_id
-    AND user_id NOT IN (
-        SELECT
-            user1_id
-        FROM
-            chat_sessions
-        UNION
-        SELECT
-            user2_id
-        FROM
-            chat_sessions
-    )
-ORDER BY
-    timestamp
-LIMIT
-    1;
-
-IF FOUND THEN -- Pair the current user with the user found in the queue
-INSERT INTO
-    chat_sessions(user1_id, user2_id)
-VALUES
-    (NEW.user_id, other_user.user_id);
-
-DELETE FROM
-    user_queue
-WHERE
-    id IN (NEW.id, other_user.id);
-
-END IF;
-
-END IF;
-
-RETURN NEW;
-
+    RETURN NEW;
 END;
-
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER pair_users_trigger
