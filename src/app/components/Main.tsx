@@ -22,7 +22,6 @@ const MainComponent = () => {
   const [chatSessionId, setChatSessionId] = useState<number | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [messageContent, setMessageContent] = useState("");
-  // const [connectionFound, setConnectionFound] = useState(false);
   const [user, setUser] = useState<number | null>(null);
   const [partnerConnected, setPartnerConnected] = useState(true);
 
@@ -52,10 +51,10 @@ const MainComponent = () => {
           setCurrentAction("chat");
           if (sessionData[0].user1_id === userId) {
             setUser(1);
-            setPartnerConnected(sessionData[0].user2_connection);
+            // setPartnerConnected(sessionData[0].user2_connection);
           } else if (sessionData[0].user2_id === userId) {
             setUser(2);
-            setPartnerConnected(sessionData[0].user1_connection);
+            // setPartnerConnected(sessionData[0].user1_connection);
           }
           return;
         }
@@ -114,8 +113,6 @@ const MainComponent = () => {
         setCurrentAction("search");
         addToQueue(userId);
       }
-    } else {
-      console.log("No valid user ID available.");
     }
   };
 
@@ -125,17 +122,13 @@ const MainComponent = () => {
         userId !== null &&
         (payload.new.user1_id === userId || payload.new.user2_id === userId)
       ) {
+        setPartnerConnected(true);
         setChatSessionId(payload.new.id);
         setCurrentAction("chat");
-        // setConnectionFound(true);
         if (payload.new.user1_id === userId) {
           setUser(1);
-          setPartnerConnected(payload.new.user2_connection);
-          updateSessionUser1(userId, true);
         } else if (payload.new.user2_id === userId) {
           setUser(2);
-          setPartnerConnected(payload.new.user1_connection);
-          updateSessionUser2(userId, true);
         }
       }
     } catch (error) {
@@ -143,35 +136,40 @@ const MainComponent = () => {
     }
   };
 
-  const handleUpdate = (payload: any) => {
+  const handleUpdate = async (payload: any) => {
     try {
       if (
         userId !== null &&
-        payload.new.user1_connection &&
-        payload.new.user2_connection &&
         (payload.new.user1_id === userId || payload.new.user2_id === userId)
       ) {
-        // console.log("UPDATE payload:", payload);
-        if (payload.new.user1_id === userId) {
-          setUser(1);
-          setPartnerConnected(payload.new.user2_connection);
-          if (!payload.new.user1_connection) {
-            handleLeave();
-            return;
-          }
-        } else if (payload.new.user2_id === userId) {
-          setUser(2);
-          setPartnerConnected(payload.new.user1_connection);
-          if (!payload.new.user2_connection) {
-            handleLeave();
+        const sessionData = await fetchSession(userId as string);
+        const sessionsWithBothConnections = sessionData.filter(
+          (session: any) => session.user1_connection && session.user2_connection
+        );
+
+        if (sessionsWithBothConnections.length > 0) {
+          return;
+        } else {
+          if (
+            (payload.new.user1_id !== userId &&
+              !payload.new.user1_connection) ||
+            (payload.new.user2_id !== userId && !payload.new.user2_connection)
+          ) {
+            setPartnerConnected(false);
             return;
           }
         }
 
-        setChatSessionId(payload.new.id);
+        if (payload.new.user1_id === userId) {
+          handleLeave();
+          return;
+        } else if (payload.new.user2_id === userId) {
+          handleLeave();
+          return;
+        }
+
         if (currentAction !== "chat") {
           setCurrentAction("chat");
-          // setConnectionFound(true);
         }
 
         // Check if both users have left
@@ -195,7 +193,6 @@ const MainComponent = () => {
       setCurrentAction("none");
       setChatSessionId(null);
       setMessages([]);
-      // setPartnerConnected(true);
       setUser(null);
 
       if (!partnerConnected) {
