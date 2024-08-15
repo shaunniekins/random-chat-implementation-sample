@@ -1,5 +1,3 @@
-// src/app/components/Main.tsx
-
 "use client";
 
 import { addToQueue, checkIdInQueue, deleteFromQueue } from "@/api/userQueue";
@@ -51,10 +49,8 @@ const MainComponent = () => {
           setCurrentAction("chat");
           if (sessionData[0].user1_id === userId) {
             setUser(1);
-            // setPartnerConnected(sessionData[0].user2_connection);
           } else if (sessionData[0].user2_id === userId) {
             setUser(2);
-            // setPartnerConnected(sessionData[0].user1_connection);
           }
           return;
         }
