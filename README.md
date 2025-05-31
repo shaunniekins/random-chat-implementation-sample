@@ -17,3 +17,4 @@
    NEXT_PUBLIC_SUPABASE_ANON_KEY=<supabase-anon-key>
    NEXT_PUBLIC_DATABASE_URL=<database-url>
    ```
+**Note:** _This project is **discontinued**._
